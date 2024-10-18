@@ -10,7 +10,7 @@ from langchain.llms import HuggingFaceHub
 import os
 from htmlTemplates import css, bot_template, user_template
 
-# Set Streamlit page configuration at the top
+# Set Streamlit page configuration
 st.set_page_config(page_title="Chat with Multiple PDFs", page_icon="📚", layout="wide")
 
 def get_pdf_text(pdf_docs):
@@ -19,18 +19,21 @@ def get_pdf_text(pdf_docs):
     for pdf in pdf_docs:
         pdf_reader = PdfReader(pdf)
         for page in pdf_reader.pages:
-            text += page.extract_text()
+            extracted_text = page.extract_text()
+            if extracted_text:  # Only add non-empty text
+                text += extracted_text
     return text
 
 def get_text_chunks(text):
     """Split text into manageable chunks for processing."""
     text_splitter = CharacterTextSplitter(
         separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
+        chunk_size=1500,  # Adjusted chunk size for faster processing
+        chunk_overlap=300,  # Adjusted overlap for context
         length_function=len
     )
     chunks = text_splitter.split_text(text)
+    st.write("Number of text chunks:", len(chunks))  # Debugging
     return chunks
 
 def get_vectorstore(text_chunks):
@@ -52,16 +55,14 @@ def handle_userinput(user_question):
 
 def get_conversation_chain(vectorstore):
     """Create a conversation chain using a HuggingFace language model."""
-    # Ensure your HuggingFace API token is set in the environment variables
     hf_api_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not hf_api_token:
         st.error("Hugging Face API token not found. Please set the HUGGINGFACEHUB_API_TOKEN environment variable.")
         return None
 
-    # Use a smaller model if resources are limited
     llm = HuggingFaceHub(
-        repo_id="google/flan-t5-large",
-        model_kwargs={"temperature": 0.5, "max_length": 512},
+        repo_id="google/flan-t5-small",  # Smaller model for faster responses
+        model_kwargs={"temperature": 0.5, "max_length": 512},  # Reduced max_length
         huggingfacehub_api_token=hf_api_token
     )
 
@@ -111,7 +112,7 @@ def set_css():
 
 def main():
     """Main function to run the Streamlit app."""
-    load_dotenv()  # Load environment variables from .env file
+    load_dotenv()
     st.write(css, unsafe_allow_html=True)
     
     if "conversation" not in st.session_state:
@@ -124,35 +125,25 @@ def main():
 
     st.markdown('<div class="main-header">Chat with Multiple PDFs 📚</div>', unsafe_allow_html=True)
     
-    st.markdown("<div class='question-box'>", unsafe_allow_html=True)
     user_question = st.text_input("Ask a question about your documents:", placeholder="Type your question here...")
     if user_question and st.session_state.conversation:
         handle_userinput(user_question)
     elif user_question and not st.session_state.conversation:
         st.warning("Please upload and process PDFs first.")
-    st.markdown("</div>", unsafe_allow_html=True)
 
     with st.sidebar:
         st.subheader("📂 Upload Your Documents")
         
-        st.markdown("<div class='pdf-upload'>", unsafe_allow_html=True)
         pdf_docs = st.file_uploader("Upload your PDFs here:", accept_multiple_files=True, type=["pdf"])
-        st.markdown("</div>", unsafe_allow_html=True)
 
         if st.button("Process", key="process_button"):
             if pdf_docs:
                 with st.spinner("Processing"):
-                    # Get PDF text
                     raw_text = get_pdf_text(pdf_docs)
-
-                    # Get the text chunks
                     text_chunks = get_text_chunks(raw_text)
-
-                    # Create vector store
                     vectorstore = get_vectorstore(text_chunks)
 
                     if vectorstore:
-                        # Create conversation chain
                         st.session_state.conversation = get_conversation_chain(vectorstore)
                         if st.session_state.conversation:
                             st.success("PDFs uploaded and processed successfully!")
@@ -161,16 +152,9 @@ def main():
             else:
                 st.error("Please upload at least one PDF.")
 
-    st.markdown("---")
-    st.markdown("### How to Use the App:")
-    st.markdown("""
-        - **Step 1:** Upload one or more PDF documents using the sidebar.
-        - **Step 2:** Click on "Process" to analyze the documents.
-        - **Step 3:** Ask questions about the content of the PDFs.
-    """)
-
 if __name__ == "__main__":
     main()
+
 
 
 # #Code for Local Model
