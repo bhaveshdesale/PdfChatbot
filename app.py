@@ -28,8 +28,8 @@ def get_text_chunks(text):
     """Split text into manageable chunks for processing."""
     text_splitter = CharacterTextSplitter(
         separator="\n",
-        chunk_size=1500,  # Adjusted chunk size for faster processing
-        chunk_overlap=300,  # Adjusted overlap for context
+        chunk_size=1000,  # Reduced chunk size for better context in LLM
+        chunk_overlap=200,  # Reduced overlap for less redundancy
         length_function=len
     )
     chunks = text_splitter.split_text(text)
@@ -54,15 +54,15 @@ def handle_userinput(user_question):
             st.write(bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
 
 def get_conversation_chain(vectorstore):
-    """Create a conversation chain using a HuggingFace language model."""
+    """Create a conversation chain using a larger HuggingFace language model."""
     hf_api_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not hf_api_token:
         st.error("Hugging Face API token not found. Please set the HUGGINGFACEHUB_API_TOKEN environment variable.")
         return None
 
     llm = HuggingFaceHub(
-        repo_id="google/flan-t5-small",  # Smaller model for faster responses
-        model_kwargs={"temperature": 0.5, "max_length": 512},  # Reduced max_length
+        repo_id="google/flan-t5-large",  # Using a larger, more capable model
+        model_kwargs={"temperature": 0.2, "max_length": 512},  # Lower temperature for more factual output
         huggingfacehub_api_token=hf_api_token
     )
 
@@ -70,7 +70,7 @@ def get_conversation_chain(vectorstore):
 
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
-        retriever=vectorstore.as_retriever(),
+        retriever=vectorstore.as_retriever(search_kwargs={"k": 4}),  # Retrieve more relevant chunks
         memory=memory
     )
     return conversation_chain
@@ -154,7 +154,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 # #Code for Local Model
